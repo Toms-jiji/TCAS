@@ -10,7 +10,7 @@ import threading
 #Date: 15/11/2023
 #Time: 12:06pm
 #Rev: 1.6
-#GitHub: https://github.com/Toms-jiji
+#GitHub: https://github.com/Toms-jiji/Kavach/tree/master
 ##########################################################################
 
 BREAKING_DISTANCE  = 100

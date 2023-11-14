@@ -11,7 +11,7 @@ import threading
 #Date: 15/11/2023
 #Time: 12:06am
 #Rev: 1.4
-#GitHub: https://github.com/Toms-jiji
+#GitHub: https://github.com/Toms-jiji/Kavach/tree/master
 ##########################################################################
 
 ACK_MESSAGE_SERVER = "ACK_from_server"
