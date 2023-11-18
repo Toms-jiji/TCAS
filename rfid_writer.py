@@ -481,6 +481,7 @@ def print_all_def():
     print(f"TRAIN_AT_PARKING_LOT                    : {TRAIN_AT_PARKING_LOT}")
     print(f"TRAIN_AT_PARKING_LOT_TRIGGER            : {TRAIN_AT_PARKING_LOT_TRIGGER}")
     print(f"ONE_TRAIN_IN_LOOP_LINE                     : {ONE_TRAIN_IN_LOOP_LINE}")
+    print(f"VARIABLE_DISTANCE                       : {VARIABLE_DISTANCE}")
     print(f"FIXED_DISTANCE                          : {FIXED_DISTANCE}")
     print(f"HEAD_ON                                 : {HEAD_ON}")
     print(f"TAIL_END                                : {TAIL_END}")
