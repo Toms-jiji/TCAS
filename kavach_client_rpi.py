@@ -22,13 +22,14 @@ ACK_MESSAGE_SERVER = "ACK_from_server"
 ACK_MESSAGE_CLIENT = "ACK_from_client"
 STOP_MESSAGE       = "STOP STOP STOP"
 SERVER_PORT   =10000  
+CLIENT_PORT     = 11000
 PACKET_TX_RATE = 2
 NUMBER_OF_TRAINS_TO_SIMULATE = 1
 RTT_SCALING_FACTOR  =   20
 SERVER_IP = "10.217.68.205"
 TRANSMISSION_TIMEOUT = 2
 
-WEEKDAY = 5
+WEEKDAY_START_OF_TRAIN = 5
 TRAIN_NUMBER = 1105
 SPEED = 50
 
@@ -517,14 +518,12 @@ def end_read(signal, frame):
 def extract_bits(message, extract_bits, position):
     return (message >> message.bit_length()-extract_bits-position) & (2**(extract_bits)-1)
 
-def decode_rfid_data(message):
+def decode_rfid_data(message,RTT):
     now = datetime.now()
-    weekday = (now.isoweekday()-1)
+    weekday = int(now.isoweekday())
 
     current_time        = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-    week_day            = WEEKDAY           #max 7
-    current_time        = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-    week_day            = WEEKDAY                               #max 7
+    week_day            = WEEKDAY_START_OF_TRAIN                               #max 7
     train_no 		    = TRAIN_NUMBER
     at_station_YN 		= 0
     reached_platform_YN = 0
@@ -539,7 +538,7 @@ def decode_rfid_data(message):
     speed 			    = SPEED  
     stop 			    = 0                                     #max 1
     direction 		    = 1                                     #max 1
-    latency 		    = 5
+    latency 		    = RTT
 
     message = int(message)
 
@@ -566,12 +565,12 @@ def decode_rfid_data(message):
         string_array    = string_array + format(array[i], f"0{size_array[i]}b")
     return int(string_array,2)
 
-def main_tx_thread(sock):
+def main_tx_thread(sock,RTT):
     data = rfid_read()
     if(data == ""):
         return
     # print(f'Data stored in RFID: {data}')
-    packet = decode_rfid_data(data)
+    packet = decode_rfid_data(data,RTT)
     # print(f'Decoded RFID Data  : {packet}')
     print(packet)
     data_to_transmit = encrypt_message(str(packet))
@@ -584,24 +583,32 @@ def main_tx_thread(sock):
     print_packet(packet)
     print("----------------------------------------------")
     lock.release()
+    return RTT
     
 
 def listen_for_STOP(sock):
+    Client_IP = socket.gethostbyname(socket.gethostname())
+    sock_stop = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_address = (Client_IP, (CLIENT_PORT+1))
+    sock_stop.bind(client_address)
+    print("Your Client-TX IP Address is: " + Client_IP)
     global ack_received_bypass
     while True:
         print("listen for STOP started")
-        data, server = sock.recvfrom(4096)
-        if (data == ACK_MESSAGE_SERVER):
-            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-            ack_received_bypass = True
-        else:
-            ack_received_bypass = False
+        data, server = sock_stop.recvfrom(4096)
         print(data)
 
 print(f'Train Number     :{TRAIN_NUMBER}')
-print(f'Train started on :{WEEKDAY}')
+print(f'Train started on :{WEEKDAY_START_OF_TRAIN}')
 
+Client_IP = socket.gethostbyname(socket.gethostname())
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+client_address = (Client_IP, CLIENT_PORT)
+sock.bind(client_address)
+print("Your Client-TX IP Address is: " + Client_IP)
+
 threading.Thread(target=listen_for_STOP, args=(sock,)).start() 
+
+RTT = 0
 while True:
-    main_tx_thread(sock)
+    RTT = main_tx_thread(sock,RTT)

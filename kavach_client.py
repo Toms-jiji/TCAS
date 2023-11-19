@@ -432,6 +432,9 @@ def create_packet(train_number, weekday, latency,speed):
     size_array          = [3,16,14,14,1,1,5,1,6,6,1,1,1,20,8,1,1,10]
     array		        = [week_day, train_no, station1, station2, at_station_YN, reached_platform_YN, platform_ID, platform_entry_YN, branch_ID, distance, loop_line_YN, loop_line_ID, track_direction, tx_time, speed, stop, direction, latency]
     string_array        = ""
+    
+    print("current_time:")
+    print(current_time)
     for i in range(0,18):
         string_array    = string_array + format(array[i], f"0{size_array[i]}b")
     return int(string_array,2)
