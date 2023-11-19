@@ -538,6 +538,7 @@ def send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision):
     tx_message = encrypt_message(STOP_MESSAGE)
     for i in range(len(trains_with_risk_of_collision)):
         train_network_details = Trains.find_train_IP_and_port(trains_with_risk_of_collision[i])
+        train_network_details = (train_network_details[0], train_network_details[1] + 1)
         sock.sendto(tx_message, train_network_details)
     print("STOP Send to all collision risk trains")
     
