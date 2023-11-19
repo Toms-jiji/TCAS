@@ -1,4 +1,17 @@
 # Kavach
+
+################################################################################################
+#   Author: Toms Jiji Varghese                                                                 #
+#   Date: 20/11/2023                                                                           #
+#   Time: 12:01am                                                                              #
+#   Rev: 1.6                                                                                   #
+#   GitHub: https://github.com/Toms-jiji/Kavach/tree/master                                    #
+#                                                                                              #
+#   Copyright (c) 2023 toms jiji varghese. ALL RIGHTS RESERVED.                                #
+#   This code is the sole property of Toms Jiji Varghese and may not be copied, distributed,   #
+#   or modified without the express written permission of Toms Jiji Varghese.                  #
+################################################################################################ 
+
 Kavach System code
 
 kavach_client_rpi   -> Code to be run on rpi                                -> includes the rfid portion as well

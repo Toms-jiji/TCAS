@@ -10,71 +10,39 @@ from mfrc522 import SimpleMFRC522
 import signal
 import sys
 
-##########################################################################
-#Author: Toms Jiji Varghese
-#Date: 18/11/2023
-#Time: 6:15pm
-#Rev: 1.5
-#GitHub: https://github.com/Toms-jiji/Kavach/tree/master
-##########################################################################
+################################################################################################
+#   Author: Toms Jiji Varghese                                                                 #
+#   Date: 19/11/2023                                                                           #
+#   Time: 11:49pm                                                                              #
+#   Rev: 1.7                                                                                   #
+#   GitHub: https://github.com/Toms-jiji/Kavach/tree/master                                    #
+#                                                                                              #
+#   Copyright (c) 2023 toms jiji varghese. ALL RIGHTS RESERVED.                                #
+#   This code is the sole property of Toms Jiji Varghese and may not be copied, distributed,   #
+#   or modified without the express written permission of Toms Jiji Varghese.                  #
+################################################################################################ 
+ACK_MESSAGE_SERVER              = "ACK_from_server"
+ACK_MESSAGE_CLIENT              = "ACK_from_client"
+STOP_MESSAGE                    = "STOP STOP STOP"
+SERVER_PORT                     = 10000  
+CLIENT_PORT                     = 11000
+PACKET_TX_RATE                  = 2
+NUMBER_OF_TRAINS_TO_SIMULATE    = 1
+RTT_SCALING_FACTOR              = 20
+SERVER_IP                       = "10.217.68.205"
+TRANSMISSION_TIMEOUT            = 2
 
-ACK_MESSAGE_SERVER = "ACK_from_server"
-ACK_MESSAGE_CLIENT = "ACK_from_client"
-STOP_MESSAGE       = "STOP STOP STOP"
-SERVER_PORT   =10000  
-CLIENT_PORT     = 11000
-PACKET_TX_RATE = 2
-NUMBER_OF_TRAINS_TO_SIMULATE = 1
-RTT_SCALING_FACTOR  =   20
-SERVER_IP = "10.217.68.205"
-TRANSMISSION_TIMEOUT = 2
-
-WEEKDAY_START_OF_TRAIN = 5
-TRAIN_NUMBER = 1105
-SPEED = 50
-
-RANDOM_DATA = False                      #Generates packet using a random number generator                                                           
-BETWEEN_SAME_STATION = False             #Generated packets with different station1 and station 2
-TRAINS_AT_STATIONS = False               #Generated packets for trains which are currently at a station
-TRAIN_AT_PARKING_LOT = False             #Generated packets for trains which are currently at a parking/storage space -->TRAIN_AT_PARKING_LOT_TRIGGER should be True
-TRAIN_AT_PARKING_LOT_TRIGGER = False     #Trigger for parking lot condition.
-ONE_TRAIN_IN_LOOP_LINE = False           #Generated packets such that one of the trains is in a loop line
-
-
-FIXED_DISTANCE = False                   #True -> Braking is based on a predefine distance ; False -> Braking is based on the relative speed
-
-HEAD_ON = True                          #Trains are going opposite to each other
-TRAINS_GOING_AWAY = True                #Trains are going away
-
-TAIL_END = False                        #Trail end collision condition    
-
-MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION   =   10 
-MIN_BRACKING_DISTANCE_REAR_END_COLLISION  =   MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION
-MIN_DECELERATION        =   6480                #km/hr^2
-
-if HEAD_ON == True:
-    NUMBER_OF_TRAINS_TO_SIMULATE = 2
-
-if TAIL_END == True:
-    NUMBER_OF_TRAINS_TO_SIMULATE = 2
-
-if TRAINS_AT_STATIONS == True:
-    NUMBER_OF_TRAINS_TO_SIMULATE = 2
-
-if ONE_TRAIN_IN_LOOP_LINE == True:
-    NUMBER_OF_TRAINS_TO_SIMULATE = 2
+WEEKDAY_START_OF_TRAIN          = 5
+TRAIN_NUMBER                    = 1105
+SPEED                           = 50
 
 key = b'NaYMfYO0C8jy4fF1ImKOMobqqvq7FMlxDCIZDFIOShk='
 global data_to_transmit
 fernet = Fernet(key)
-# Create a Lock object
-lock = threading.Lock()
 
 reader = SimpleMFRC522()
 is_reading = True
 GPIO.setwarnings(False)
-
-ack_received_bypass = False
 
 class Train_node:
     def __init__(self, data_list=None):   #Total = 127bits
@@ -165,9 +133,7 @@ def decrypt_message(message):
 def int_to_binary(num, bits):
     return format(num, f"0{bits}b")
 
-def extract_bits(message, extract_bits, left_shift_by):
-    return (message >> left_shift_by) & (2**(extract_bits)-1)
-
+#function to print a packet
 def print_packet(packet):
     size_array          = [3,16,14,14,1,1,5,1,6,6,1,1,1,20,8,1,1,10]
     packet = int(packet)
@@ -177,275 +143,7 @@ def print_packet(packet):
         packet = packet >> (size_array[17-i])
     Train = Train_node(array)
     Train.show()
-
-def create_packet(train_number, weekday, latency,speed):
-    global BETWEEN_SAME_STATION
-    global TRAINS_AT_STATIONS
-    global ONE_TRAIN_IN_LOOP_LINE
-    global FIXED_DISTANCE
-    global HEAD_ON
-    global TAIL_END
-
-
-    now = datetime.now()
-    current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-    week_day            = weekday           #max 7
-    train_no 		    = train_number      #max 65535
-    station1 		    = 9010              #max 16383
-    station2 	    	= 9011              #max 16383
-    at_station_YN 		= 0                 #max 1
-    reached_platform_YN = 0                 #max 1
-    platform_ID 		= 0                 #max 31
-    platform_entry_YN 	= 0                 #max 1
-    branch_ID 		    = 0                 #max 63
-    distance 		    = 23                #max 63
-    loop_line_YN 		= 0                 #max 1
-    loop_line_ID 		= 0                 #max 1
-    track_direction 	= 0                 #max 1
-    tx_time 		    = current_time      #max 1048575
-    if FIXED_DISTANCE == False:
-        speed 			    = 10                #max 255
-    else:
-        speed 			    = speed
-    stop 			    = 0                 #max 1
-    direction 		    = 0                 #max 1
-    latency 		    = latency               #max 1023
-
-    if TRAINS_AT_STATIONS==True:
-        print("at stations")
-        now = datetime.now()
-        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-        week_day            = weekday                               #max 7
-        train_no 		    = train_number                          #max 65535
-        station1 		    = 9010                                  #max 16383
-        station2 	    	= 9010                                  #max 16383
-        at_station_YN 		= 1                                     #max 1
-        reached_platform_YN = 0                                     #max 1
-        platform_ID 		= 0                                     #max 31
-        platform_entry_YN 	= 0                                     #max 1
-        branch_ID 		    = 0                                     #max 63
-        distance 		    = 0                                     #max 63
-        loop_line_YN 		= 0                                     #max 1
-        loop_line_ID 		= 0                                     #max 1
-        track_direction 	= 0                                     #max 1
-        tx_time 		    = current_time                          #max 1048575
-        speed 			    = speed                                 #max 255
-        stop 			    = 0                                     #max 1
-        direction 		    = 0                                     #max 1
-        latency 		    = latency                               #max 1023
-
-    elif RANDOM_DATA==True:
-        now = datetime.now()
-        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-        week_day            = weekday           #max 7
-        train_no 		    = train_number      #max 65535
-        station1 		    = 9010              #max 16383
-        station2 	    	= random.randint(1000, 1020)              #max 16383
-        at_station_YN 		= 0                 #max 1
-        reached_platform_YN = 0                 #max 1
-        platform_ID 		= 0                 #max 31
-        platform_entry_YN 	= 0                 #max 1
-        branch_ID 		    = 0                 #max 63
-        distance 		    = random.randint(1,25)                #max 63
-        loop_line_YN 		= 0                 #max 1
-        loop_line_ID 		= 0                 #max 1
-        track_direction 	= random.randint(0,1)                 #max 1
-        tx_time 		    = current_time      #max 1048575
-        speed 			    = speed                #max 255
-        stop 			    = 0                 #max 1
-        direction 		    = 0                 #max 1
-        latency 		    = latency               #max 1023
-    
-    elif TRAIN_AT_PARKING_LOT==True:
-        now = datetime.now()
-        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-        week_day            = weekday                               #max 7
-        train_no 		    = train_number                          #max 65535
-        station1 		    = 9010                                  #max 16383
-        station2 	    	= 0                                  #max 16383
-        at_station_YN 		= 1                                     #max 1
-        reached_platform_YN = 0                                     #max 1
-        platform_ID 		= 0                                     #max 31
-        platform_entry_YN 	= 0                                     #max 1
-        branch_ID 		    = 0                                     #max 63
-        distance 		    = 0                                     #max 63
-        loop_line_YN 		= 0                                     #max 1
-        loop_line_ID 		= 0                                     #max 1
-        track_direction 	= 0                                     #max 1
-        tx_time 		    = current_time                          #max 1048575
-        speed 			    = speed                                 #max 255
-        stop 			    = 0                                     #max 1
-        direction 		    = 0                                     #max 1
-        latency 		    = latency                               #max 1023
-
-    elif ONE_TRAIN_IN_LOOP_LINE==True:
-        now = datetime.now()
-        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-        week_day            = weekday                               #max 7
-        train_no 		    = train_number                          #max 65535
-        station1 		    = 9010                                  #max 16383
-        station2 	    	= 9011                                  #max 16383
-        at_station_YN 		= 0                                     #max 1
-        reached_platform_YN = 0                                     #max 1
-        platform_ID 		= 0                                     #max 31
-        platform_entry_YN 	= 0                                     #max 1
-        branch_ID 		    = 0                                     #max 63
-        distance 		    = 23                                    #max 63
-        loop_line_YN 		= 1                                     #max 1  -- first loopline after the rfid with distance 23
-        loop_line_ID 		= 0                                     #max 1  -- Not required
-        track_direction 	= 0                                     #max 1
-        tx_time 		    = current_time                          #max 1048575
-        speed 			    = speed                                 #max 255
-        stop 			    = 0                                     #max 1
-        direction 		    = 0                                     #max 1
-        latency 		    = latency                               #max 1023
-
-    if FIXED_DISTANCE == True:
-        if HEAD_ON==True and TRAINS_GOING_AWAY==True:
-            now = datetime.now()
-            current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-            week_day            = weekday                               #max 7
-            train_no 		    = train_number                          #max 65535
-            station1 		    = 9010                                  #max 16383
-            station2 	    	= 9011                                  #max 16383
-            at_station_YN 		= 0                                     #max 1
-            reached_platform_YN = 0                                     #max 1
-            platform_ID 		= 0                                     #max 31
-            platform_entry_YN 	= 0                                     #max 1
-            branch_ID 		    = 0                                     #max 63
-            distance 		    = 23+MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION+1                                    #max 63
-            loop_line_YN 		= 0                                     #max 1  -- first loopline after the rfid with distance 23
-            loop_line_ID 		= 0                                     #max 1  -- Not required
-            track_direction 	= 0                                     #max 1
-            tx_time 		    = current_time                          #max 1048575
-            speed 			    = speed                                 #max 255
-            stop 			    = 0                                     #max 1
-            direction 		    = 1                                     #max 1
-            latency 		    = latency                               #max 1023
-
-        elif HEAD_ON==True and TRAINS_GOING_AWAY==False:
-            now = datetime.now()
-            current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-            week_day            = weekday                               #max 7
-            train_no 		    = train_number                          #max 65535
-            station1 		    = 9010                                  #max 16383
-            station2 	    	= 9011                                  #max 16383
-            at_station_YN 		= 0                                     #max 1
-            reached_platform_YN = 0                                     #max 1
-            platform_ID 		= 0                                     #max 31
-            platform_entry_YN 	= 0                                     #max 1
-            branch_ID 		    = 0                                     #max 63
-            distance 		    = 23-MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION+1                                    #max 63
-            loop_line_YN 		= 0                                     #max 1  -- first loopline after the rfid with distance 23
-            loop_line_ID 		= 0                                     #max 1  -- Not required
-            track_direction 	= 0                                     #max 1
-            tx_time 		    = current_time                          #max 1048575
-            speed 			    = speed                                 #max 255
-            stop 			    = 0                                     #max 1
-            direction 		    = 1                                     #max 1
-            latency 		    = latency                               #max 1023
-
-        elif TAIL_END==True:
-            now = datetime.now()
-            current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-            week_day            = weekday                               #max 7
-            train_no 		    = train_number                          #max 65535
-            station1 		    = 9010                                  #max 16383
-            station2 	    	= 9011                                  #max 16383
-            at_station_YN 		= 0                                     #max 1
-            reached_platform_YN = 0                                     #max 1
-            platform_ID 		= 0                                     #max 31
-            platform_entry_YN 	= 0                                     #max 1
-            branch_ID 		    = 0                                     #max 63
-            distance 		    = 23-MIN_BRACKING_DISTANCE_REAR_END_COLLISION+1                                    #max 63
-            loop_line_YN 		= 0                                     #max 1  -- first loopline after the rfid with distance 23
-            loop_line_ID 		= 0                                     #max 1  -- Not required
-            track_direction 	= 0                                     #max 1
-            tx_time 		    = current_time                          #max 1048575
-            speed 			    = speed                                 #max 255
-            stop 			    = 0                                     #max 1
-            direction 		    = 0                                     #max 1
-            latency 		    = latency                               #max 1023
-
-    if FIXED_DISTANCE == False:
-        if HEAD_ON==True and TRAINS_GOING_AWAY==True:
-            now = datetime.now()
-            current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-            week_day            = weekday                               #max 7
-            train_no 		    = train_number                          #max 65535
-            station1 		    = 9010                                  #max 16383
-            station2 	    	= 9011                                  #max 16383
-            at_station_YN 		= 0                                     #max 1
-            reached_platform_YN = 0                                     #max 1
-            platform_ID 		= 0                                     #max 31
-            platform_entry_YN 	= 0                                     #max 1
-            branch_ID 		    = 0                                     #max 63
-            distance 		    = 24                                    #max 63
-            loop_line_YN 		= 0                                     #max 1  -- first loopline after the rfid with distance 23
-            loop_line_ID 		= 0                                     #max 1  -- Not required
-            track_direction 	= 0                                     #max 1
-            tx_time 		    = current_time                          #max 1048575
-            speed 			    = 150                                   #max 255
-            stop 			    = 0                                     #max 1
-            direction 		    = 1                                     #max 1
-            latency 		    = latency                               #max 1023
-
-        elif HEAD_ON==True and TRAINS_GOING_AWAY==False:
-            HEAD_ON = False
-            now = datetime.now()
-            current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-            week_day            = weekday                               #max 7
-            train_no 		    = train_number                          #max 65535
-            station1 		    = 9010                                  #max 16383
-            station2 	    	= 9011                                  #max 16383
-            at_station_YN 		= 0                                     #max 1
-            reached_platform_YN = 0                                     #max 1
-            platform_ID 		= 0                                     #max 31
-            platform_entry_YN 	= 0                                     #max 1
-            branch_ID 		    = 0                                     #max 63
-            distance 		    = 21                                   #max 63
-            loop_line_YN 		= 0                                     #max 1  -- first loopline after the rfid with distance 23
-            loop_line_ID 		= 0                                     #max 1  -- Not required
-            track_direction 	= 0                                     #max 1
-            tx_time 		    = current_time                          #max 1048575
-            speed 			    = 150                                   #max 255
-            stop 			    = 0                                     #max 1
-            direction 		    = 1                                     #max 1
-            latency 		    = latency                               #max 1023
-
-        elif TAIL_END==True:
-            now = datetime.now()
-            current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))*weekday
-            week_day            = weekday                               #max 7
-            train_no 		    = train_number                          #max 65535
-            station1 		    = 9010                                  #max 16383
-            station2 	    	= 9011                                  #max 16383
-            at_station_YN 		= 0                                     #max 1
-            reached_platform_YN = 0                                     #max 1
-            platform_ID 		= 0                                     #max 31
-            platform_entry_YN 	= 0                                     #max 1
-            branch_ID 		    = 0                                     #max 63
-            distance 		    = 24                                    #max 63
-            loop_line_YN 		= 0                                     #max 1  -- first loopline after the rfid with distance 23
-            loop_line_ID 		= 0                                     #max 1  -- Not required
-            track_direction 	= 0                                     #max 1
-            tx_time 		    = current_time                          #max 1048575
-            speed 			    = 150                                   #max 255
-            stop 			    = 0                                     #max 1
-            direction 		    = 0                                     #max 1
-            latency 		    = latency                               #max 1023
-    
-    if BETWEEN_SAME_STATION == False:
-        station2 	    	= random.randint(1500, 2000)
-        station2 	    	= random.randint(1000, 1500)  
-
-    size_array          = [3,16,14,14,1,1,5,1,6,6,1,1,1,20,8,1,1,10]
-    array		        = [week_day, train_no, station1, station2, at_station_YN, reached_platform_YN, platform_ID, platform_entry_YN, branch_ID, distance, loop_line_YN, loop_line_ID, track_direction, tx_time, speed, stop, direction, latency]
-    string_array        = ""
-    for i in range(0,18):
-        string_array    = string_array + format(array[i], f"0{size_array[i]}b")
-    return int(string_array,2)
-    
+   
 def check_number_in_list(number, list):
     if number in list:
         return True
@@ -485,25 +183,15 @@ def transmit(sock, data_to_transmit):
     print(decrypt_message(data))
     return (RTT)
 
-def print_all_def():
-    print(f"BETWEEN_SAME_STATION                    : {BETWEEN_SAME_STATION}")
-    print(f"TRAINS_AT_STATIONS                      : {TRAINS_AT_STATIONS}")
-    print(f"TRAIN_AT_PARKING_LOT                    : {TRAIN_AT_PARKING_LOT}")
-    print(f"TRAIN_AT_PARKING_LOT_TRIGGER            : {TRAIN_AT_PARKING_LOT_TRIGGER}")
-    print(f"ONE_TRAIN_IN_LOOP_LINE                     : {ONE_TRAIN_IN_LOOP_LINE}")
-    print(f"VARIABLE_DISTANCE                       : {VARIABLE_DISTANCE}")
-    print(f"FIXED_DISTANCE                          : {FIXED_DISTANCE}")
-    print(f"HEAD_ON                                 : {HEAD_ON}")
-    print(f"TAIL_END                                : {TAIL_END}")
-    
+#Function to read RFID    
 def rfid_read():
     # Hook the SIGINT
     signal.signal(signal.SIGINT, end_read)
-    GPIO.setwarnings(False)
+    GPIO.setwarnings(False)                 #Turn of GPIO warnings
     GPIO.cleanup()
 
     try:
-        id, data = reader.read()
+        id, data = reader.read()            #Read RFID
     finally:
         GPIO.cleanup()
     return data
@@ -515,9 +203,11 @@ def end_read(signal, frame):
     is_reading = False
     sys.exit()
 
+#function to extract defined number of bits
 def extract_bits(message, extract_bits, position):
     return (message >> message.bit_length()-extract_bits-position) & (2**(extract_bits)-1)
 
+#function to decode rfid data and pack it in an array
 def decode_rfid_data(message,RTT):
     now = datetime.now()
     weekday = int(now.isoweekday())
@@ -537,7 +227,7 @@ def decode_rfid_data(message,RTT):
     tx_time 		    = current_time
     speed 			    = SPEED  
     stop 			    = 0                                     #max 1
-    direction 		    = 1                                     #max 1
+    direction 		    = 0                                     #max 1
     latency 		    = RTT
 
     message = int(message)
@@ -562,41 +252,66 @@ def decode_rfid_data(message,RTT):
     size_array          = [3,16,14,14,1,1,5,1,6,6,1,1,1,20,8,1,1,10]
     string_array        = ""
     for i in range(0,18):
-        string_array    = string_array + format(array[i], f"0{size_array[i]}b")
+        string_array    = string_array + str(format(array[i], f"0{size_array[i]}b"))
     return int(string_array,2)
+
+#function to check if data is valid
+def check_data(data):
+    try:
+        data = int(str(data))
+    except ValueError:
+        return 0
+    
+    data = int(str(data))
+    if (int(len(bin(data))/2) <30):
+        return 0
+    remainder = data // (2**int(len(bin(data))/2)-1)
+    data = data >> int(len(bin(data))/2)
+    if data == remainder:
+        return 1
+    else:
+        return 0
 
 def main_tx_thread(sock,RTT):
     data = rfid_read()
-    if(data == ""):
-        return
-    # print(f'Data stored in RFID: {data}')
-    packet = decode_rfid_data(data,RTT)
-    # print(f'Decoded RFID Data  : {packet}')
-    print(packet)
-    data_to_transmit = encrypt_message(str(packet))
+    if "AUTH" in data:
+        print("----------------------------------------------")
+        return (0,0)                                                #data is not valid
+    if(check_data(data) != 1):
+        print("Unauthorised rfid card")
+        print("----------------------------------------------")
+        return (0,0)                                                #data is not valid
+    if data == None:
+        print("None detecteed")
+        print("----------------------------------------------")
+        return (0,0)                                                #data is not valid
+    packet = decode_rfid_data(str(data),RTT)                        #Decoded RFID data
+    data_to_transmit = encrypt_message(str(packet))                 #Encrypted RFID data
 
-    lock.acquire()
     RTT = transmit(sock, data_to_transmit)
-    if RTT == None:
+    if RTT == None:                                                 #STOP signal received on TX - Port;  stopping train
         print("***************************************STOP STOP STOP***************************************")
     print("----------------------------------------------")
     print_packet(packet)
     print("----------------------------------------------")
-    lock.release()
-    return RTT
+    return (RTT,1)                                                  #return RTT with valid flag
     
 
 def listen_for_STOP(sock):
-    Client_IP = socket.gethostbyname(socket.gethostname())
-    sock_stop = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_address = (Client_IP, (CLIENT_PORT+1))
-    sock_stop.bind(client_address)
+    Client_IP = socket.gethostbyname(socket.gethostname())              #Get device IP address
+    sock_stop = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)        #create a socket to listen for stop messages
+    client_address = (Client_IP, (CLIENT_PORT+1))                       
+    sock_stop.bind(client_address)                                      #bind stop port which is tx_port+1 to the ip
     print("Your Client-TX IP Address is: " + Client_IP)
-    global ack_received_bypass
     while True:
         print("listen for STOP started")
         data, server = sock_stop.recvfrom(4096)
-        print(data)
+        # print(data)
+        if STOP_MESSAGE == decrypt_message(data):
+            print("***************************************STOP STOP STOP***************************************")
+            print(f"TRAIN STOPPED:                : {TRAIN_NUMBER}")    
+            print("***************************************STOP STOP STOP***************************************")
+                
 
 print(f'Train Number     :{TRAIN_NUMBER}')
 print(f'Train started on :{WEEKDAY_START_OF_TRAIN}')
@@ -611,4 +326,10 @@ threading.Thread(target=listen_for_STOP, args=(sock,)).start()
 
 RTT = 0
 while True:
-    RTT = main_tx_thread(sock,RTT)
+    (temp, is_RTT) = main_tx_thread(sock,RTT)
+    try:
+        GPIO.cleanup()
+    finally:
+        GPIO.cleanup()
+    if is_RTT == 1:             #Valid RTT is received
+        RTT = temp

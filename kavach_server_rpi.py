@@ -4,14 +4,17 @@ from cryptography.fernet import Fernet
 from datetime import datetime
 import threading
 
-
-##########################################################################
-#Author: Toms Jiji Varghese
-#Date: 15/11/2023
-#Time: 12:06pm
-#Rev: 1.6
-#GitHub: https://github.com/Toms-jiji/Kavach/tree/master
-##########################################################################
+################################################################################################
+#   Author: Toms Jiji Varghese                                                                 #
+#   Date: 19/11/2023                                                                           #
+#   Time: 11:55pm                                                                              #
+#   Rev: 1.7                                                                                   #
+#   GitHub: https://github.com/Toms-jiji/Kavach/tree/master                                    #
+#                                                                                              #
+#   Copyright (c) 2023 toms jiji varghese. ALL RIGHTS RESERVED.                                #
+#   This code is the sole property of Toms Jiji Varghese and may not be copied, distributed,   #
+#   or modified without the express written permission of Toms Jiji Varghese.                  #
+################################################################################################ 
 
 BREAKING_DISTANCE  = 100
 ACK_MESSAGE_SERVER = "ACK_from_server"
@@ -536,9 +539,11 @@ def store_and_process_received_data(message,train_ip, train_port):
 
 def send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision):
     tx_message = encrypt_message(STOP_MESSAGE)
+    # print(train_network_details)
     for i in range(len(trains_with_risk_of_collision)):
         train_network_details = Trains.find_train_IP_and_port(trains_with_risk_of_collision[i])
         train_network_details = (train_network_details[0], train_network_details[1] + 1)
+        print(train_network_details)
         sock.sendto(tx_message, train_network_details)
     print("STOP Send to all collision risk trains")
     

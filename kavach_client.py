@@ -6,13 +6,18 @@ from cryptography.fernet import Fernet
 from random import randint
 import threading
 
-##########################################################################
-#Author: Toms Jiji Varghese
-#Date: 15/11/2023
-#Time: 12:06am
-#Rev: 1.4
-#GitHub: https://github.com/Toms-jiji/Kavach/tree/master
-##########################################################################
+
+################################################################################################
+#   Author: Toms Jiji Varghese                                                                 #
+#   Date: 15/11/2023                                                                           #
+#   Time: 12:06am                                                                              #
+#   Rev: 1.4                                                                                   #
+#   GitHub: https://github.com/Toms-jiji/Kavach/tree/master                                    #
+#                                                                                              #
+#   Copyright (c) 2023 toms jiji varghese. ALL RIGHTS RESERVED.                                #
+#   This code is the sole property of Toms Jiji Varghese and may not be copied, distributed,   #
+#   or modified without the express written permission of Toms Jiji Varghese.                  #
+################################################################################################ 
 
 ACK_MESSAGE_SERVER = "ACK_from_server"
 ACK_MESSAGE_CLIENT = "ACK_from_client"
