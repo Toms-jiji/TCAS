@@ -1,6 +1,4 @@
 # Kavach
-<br>
-
 Author: Toms Jiji Varghese                                                                 <br>
 Date: 20/11/2023                                                                           <br>
 Time: 12:01am                                                                              <br>
