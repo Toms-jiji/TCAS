@@ -3,6 +3,7 @@ import threading
 from cryptography.fernet import Fernet
 from datetime import datetime
 import threading
+import time
 
 ################################################################################################
 #   Author: Toms Jiji Varghese                                                                 #
@@ -19,7 +20,15 @@ import threading
 BREAKING_DISTANCE  = 100
 ACK_MESSAGE_SERVER = "ACK_from_server"
 ACK_MESSAGE_CLIENT = "ACK_from_client"
-SERVER_IP          = "10.217.68.205"
+CHALLENGE_FROM_CLIENT = "What is your professor's name"
+RESPONSE_TO_CLIENT    = "TVP"
+CHALLENGE_FROM_SERVER = "What is your course name"
+RESPONSE_TO_SERVER    = "TCP/IP"
+AUTH_TIMEOUT           = 1
+STALE_PACKET_TIMEOUT      = 15
+ACK_TIMEOUT         = 1
+CRC_POLYNOMIAL      = 198 #max 8bit
+SERVER_IP          = "10.217.68.128"
 RTT_SCALING        = 20
 SERVER_PORT        = 10000
 MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION   =   10 
@@ -126,9 +135,11 @@ class Train_node:
             self.next		         = None
 
     def show(self):
-        hour = round((self.tx_time/self.weekday)//(60*60))
-        min = round(((self.tx_time/self.weekday)%(60*60))//(60))
-        sec = round(((self.tx_time/self.weekday)%(60*60))%(60))
+        now = datetime.now()
+        weekday = int(now.isoweekday())
+        hour = round((self.tx_time/weekday)//(60*60))
+        min = round(((self.tx_time/weekday)%(60*60))//(60))
+        sec = round(((self.tx_time/weekday)%(60*60))%(60))
         print("Train details are:")
         print("rcvd_time 	    	:",self.rcvd_time)
         print("weekday   	    	:",self.weekday)
@@ -186,6 +197,8 @@ class Train_linked_list:
         cur = self.head
         trains_with_risk_of_collision = []      #Array containing trains with the risk of collision with the current train
         while cur.next:
+            if ((my_train.station1 == 1)and(my_train.station2 == 1)):
+                return
             if(cur.train_no==None):
                 cur = cur.next
                 continue
@@ -337,7 +350,34 @@ class Train_linked_list:
             i+=1
             cur = cur.next
         if cur.train_no==train_no:
-            return i-1
+            return (i-1,cur.tx_time)
+        else:
+            return (None,None)
+
+    #Function to find a train from the linked list
+    def find_other_trains_for_risk_with_stale_packet_trains(self,train_no):
+        i=0
+        cur = self.head
+        station1=0
+        station2=0
+        Other_trains = []
+        while cur.next:
+            if cur.train_no==train_no:
+                break
+            i+=1
+            cur = cur.next
+        if cur.train_no==train_no:
+            station1 = cur.station1
+            station2 = cur.station2
+            cur = self.head
+            while True:
+                if cur.station1==station1:
+                    if cur.station2==station2:
+                        Other_trains.append(cur.train_no)
+                if cur.next == None:
+                    break
+                cur = cur.next
+            return Other_trains
         else:
             return None
 
@@ -409,6 +449,17 @@ class Train_linked_list:
             elems.append(cur_node.train_no)
         print (elems)
 
+    #Function to get list of running trains
+    def running_trains(self):
+        train_no = []
+        train_time = []
+        cur_node = self.head
+        while cur_node.next!=None:
+            cur_node = cur_node.next
+            train_no.append(cur_node.train_no)
+            train_time.append(cur_node.tx_time)
+        return (train_no, train_time)
+
     #Function to fetch train data from the database using the index of the linkedlist
     def get(self,index):
         cur_idx=0
@@ -442,7 +493,7 @@ def extract_bits(message, extract_bits, left_shift_by):
 
 #Funcito the extract meaningful data from the bits received. It returns the data in an array
 def extract_data(message):
-    message = int(message)
+    message = int(message, 2)
     weekday 		    = extract_bits(message, 3, 107)
     train_no 		    = extract_bits(message, 16, 91)
     station1 		    = extract_bits(message, 14, 77)
@@ -480,12 +531,47 @@ def decrypt_message(message):
     # Return the decrypted message
     return decrypted_message.decode()
 
+def extract_first_8_bits(binary_string):
+    return binary_string[-8:]
+
+def remove_first_8_bits(binary_string):
+    return binary_string[:-8]
+
+def mod_large_number(number, divisor):
+    result = 0
+    for bit in number:
+        result = (result << 1 | int(bit)) % divisor
+    return result
+
+def verify_crc(data):
+    crc_data = extract_first_8_bits(data)
+    data = remove_first_8_bits(data)
+    data = int(data,2)
+    remainder = mod_large_number(str(data), CRC_POLYNOMIAL)
+    crc_ref = format(remainder, '08b')
+    if(crc_data == crc_ref):
+        return 1
+    else:
+        return 0
+
+def crc(data):
+    crc_data = mod_large_number(data, CRC_POLYNOMIAL)
+    data = bin(int(data)) + format(crc_data, '08b')
+
+    return data
+
+
 #Function that each client thread will run
-def handle_client(data, sock, address):
+def handle_client(data, sock, address, first_Call, sock_for_acks):
     
     # Print the message and the client's address
     rcvd_message = decrypt_message(data)
-    
+    if(verify_crc(bin(int(rcvd_message,2)))!=1):
+        print("CRC failed so discarding packet")
+        return
+    print("CRC passed")
+
+    rcvd_message = remove_first_8_bits(bin(int(rcvd_message,2)))
     # Send a response back to the client
     tx_message = encrypt_message(ACK_MESSAGE_SERVER)
     sock.sendto(tx_message, address)
@@ -498,21 +584,28 @@ def handle_client(data, sock, address):
 
     print("ACK Sent")
 
-    store_and_process_received_data(rcvd_message, address[0], address[1])
+    store_and_process_received_data(rcvd_message, address[0], address[1], first_Call, sock_for_acks)
     print("exiting thread")
     print("------------------------------------------------------------")
     lock.release()
     return 0
 
 #Decoding, storing and processing the received data in the database
-def store_and_process_received_data(message,train_ip, train_port):
+def store_and_process_received_data(message,train_ip, train_port, first_Call, sock_for_acks):
     now = datetime.now()                
     time = now.strftime("%H:%M:%S")         #Getting the current time
     train_data = extract_data(message)      #Extracting meaningful information from the data received.
-    if(Trains.find(train_data[1])==None):   #Checking if the train already exists using the train_number
-        Trains.append(train_data, time, train_ip, train_port)     #If the trains does not exit then it appends the data to the end of the linkedlist
-        print("New train added")
+    if(Trains.find(train_data[1])==(None,None)):   #Checking if the train already exists using the train_number
+        if(first_Call == 1):
+            Trains.append(train_data, time, train_ip, train_port)     #If the trains does not exit then it appends the data to the end of the linkedlist
+            print("New train added")
+        else:
+            print("Train not authenticated. So discarding packet")
     else:
+        my_train = Train_node(train_data, time,train_ip, train_port) 
+        if(Trains.find(train_data[1])[1]>my_train.tx_time):                 #Discard old timestamp packets
+            print("packet received with old timestamp. So Discarding it")
+            return  0
         Trains.update(train_data, time, train_ip, train_port)     #If the train exists in the database then it updates it.
         print("Train details exist and are updated")
     print(" ")
@@ -534,18 +627,149 @@ def store_and_process_received_data(message,train_ip, train_port):
 
     trains_with_risk_of_collision = Trains.trains_on_same_track(my_train)   #Checking for any other trains within alert distance and on the same track
     if trains_with_risk_of_collision != None:
-        send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision)
+        send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision, sock_for_acks)
     return 0
 
-def send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision):
+def send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision, sock_for_acks):
     tx_message = encrypt_message(STOP_MESSAGE)
-    # print(train_network_details)
+    tx_message2 = MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION
+    ack_list=[]
     for i in range(len(trains_with_risk_of_collision)):
         train_network_details = Trains.find_train_IP_and_port(trains_with_risk_of_collision[i])
         train_network_details = (train_network_details[0], train_network_details[1] + 1)
-        print(train_network_details)
-        sock.sendto(tx_message, train_network_details)
+        ack_list.append(train_network_details)
+
+
+        threading.Thread(target=stop_trains, args=(train_network_details,tx_message)).start()
+    threading.Thread(target=check_for_acks_and_retransmit_if_needed, args=(trains_with_risk_of_collision,tx_message, sock_for_acks, ack_list)).start()
+
+        # sock.sendto(tx_message, train_network_details)
+        # sock.sendto(bin(tx_message2).encode(), train_network_details)
     print("STOP Send to all collision risk trains")
+    
+def check_for_acks_and_retransmit_if_needed(trains_with_risk_of_collision, tx_message, sock_for_acks, ack_list):
+    start_time = time.time()
+    while True:
+        elapsed_time = time.time() - start_time
+        if elapsed_time >= 5:
+            print("ack timeout")
+            start_time = time.time()
+            print(f'Sending stop again to : {ack_list}')
+            for i in range(len(ack_list)): 
+                threading.Thread(target=stop_trains, args=(ack_list[i],tx_message)).start()
+        sock_for_acks.settimeout(ACK_TIMEOUT)
+        try:
+            data, client = sock_for_acks.recvfrom(4096)      
+        except:
+            continue
+        if(decrypt_message(data) == ACK_MESSAGE_CLIENT):
+            data = None
+            if client in ack_list:
+                print(f'ACS for STOP received from: {client}')
+                ack_list.remove(client)
+        if(len(ack_list)==0):
+            print("exiting ack thread")
+            return
+        
+        
+
+
+
+
+def stop_trains(train_network_details,tx_message):
+    sock.sendto(tx_message, train_network_details)
+
+def auth_server(sock_auth_server, sock_auth_client, sock_get_first_data, sock_for_acks):
+    print(f"auth thread started...")
+    while True:
+        # print("Listening for auth")
+        data, address = sock_auth_server.recvfrom(4096)
+        data = decrypt_message(data)
+        if data == CHALLENGE_FROM_CLIENT:
+            print("server authenticated")
+            sock_auth_server.sendto(encrypt_message(RESPONSE_TO_CLIENT), address)
+            time.sleep(0.01)
+            print(f"Challenge sent to client; address: {address}")
+            sock_auth_server.sendto(encrypt_message(CHALLENGE_FROM_SERVER), address)
+            threading.Thread(target=auth_client_check, args=(sock_auth_client, sock_get_first_data, sock_for_acks)).start()
+        # return
+
+def auth_client_check(sock_auth_client, sock_get_first_data, sock_for_acks):
+    # print("auth client started")
+    sock_auth_client.settimeout(AUTH_TIMEOUT)
+    try:
+        data, address2 = sock_auth_client.recvfrom(4096)
+        data = decrypt_message(data)
+    except socket.timeout:
+        print("auth client sock timeout")
+        return
+    if data == RESPONSE_TO_SERVER:
+        print("client authenticated")
+        threading.Thread(target=get_first_data,  args=(address2,sock_get_first_data, sock_for_acks)).start()
+        # print("going out of auth_client_check")
+        return
+    else:
+        return
+    
+def get_first_data(address, sock_get_first_data, sock_for_acks):
+    print("get_first_data")
+    
+    print(f'server address for first packet:{(SERVER_IP, SERVER_PORT+3)}')
+    sock_get_first_data.settimeout(AUTH_TIMEOUT*10)
+    try:
+        data, address2 = sock_get_first_data.recvfrom(4096)
+    except socket.timeout:
+        print("get_first_data timeout")
+        return
+    if (address == address2):
+        # print("handle client called")
+        handle_client(data, sock_get_first_data, address, 1, sock_for_acks)
+        # print("going out of get first data")
+    return
+
+
+def check_for_stale_packets(sock_for_acks):
+    while(True):
+        time.sleep(1)
+        now = datetime.now()
+        weekday = int(now.isoweekday())
+        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))
+        trains_on_same_track = []
+        train_no=[]
+        train_time = []
+        try:
+            (train_no, train_time) = Trains.running_trains()
+        # except:
+        #     continue
+        finally:
+            if(len(train_no)==None):
+                continue
+        for i in range(len(train_no)):
+            # print(f'current time: {current_time}')
+            # print(f'train_time: {int(train_time[i])/weekday}')
+            print(f'stale packet timeout triggering in: {(current_time-int(train_time[i])/weekday)+11}')
+            if ((current_time-int(train_time[i])/weekday)>(STALE_PACKET_TIMEOUT-17)):
+                print(f'Stale Packet found, Train number is:{train_no[i]}')
+                print("!!!!.........ALERT ALERT ALERT.........!!!!")
+                trains_on_same_track.append(train_no[i])
+
+        for i in range(len(trains_on_same_track)):
+            temp = Trains.find_other_trains_for_risk_with_stale_packet_trains(trains_on_same_track[i])
+            for i in range(len(temp)):
+                if(temp[i]) in trains_on_same_track:
+                    continue
+                trains_on_same_track.append(temp[i])
+                
+
+
+        if(len(trains_on_same_track)!=0):
+            print(trains_on_same_track)
+            send_alert_to_high_collision_risk_trains(trains_on_same_track, sock_for_acks)
+            Trains.delete(trains_on_same_track[i])
+        
+        # print(f'Running trains after stopping ones with stale packets and their corresponding risky ones: {Trains.display()}')
+        
+
     
 
 global Trains                               #linkedlist containing all the trains
@@ -556,6 +780,22 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Bind the socket to a specific IP address and port
 server_address = (SERVER_IP, SERVER_PORT)
 sock.bind(server_address)
+
+sock_auth_server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_auth_server.bind((SERVER_IP, SERVER_PORT+1))
+
+sock_auth_client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_auth_client.bind((SERVER_IP, SERVER_PORT+2))
+
+sock_get_first_data = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_get_first_data.bind((SERVER_IP, SERVER_PORT+3))
+
+sock_for_acks = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_for_acks.bind((SERVER_IP, SERVER_PORT+4))
+
+threading.Thread(target=auth_server, args=(sock_auth_server,sock_auth_client, sock_get_first_data, sock_for_acks)).start()
+
+threading.Thread(target=check_for_stale_packets, args=(sock_for_acks,)).start()
 print("Waiting for a message...")
 while True:
     # print("------------------------------------------------------------")
@@ -564,4 +804,4 @@ while True:
     data, address = sock.recvfrom(4096)
 
     # Create a new thread to handle the client
-    threading.Thread(target=handle_client, args=(data, sock, address)).start()
+    threading.Thread(target=handle_client, args=(data, sock, address, 0, sock_for_acks)).start()
