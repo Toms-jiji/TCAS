@@ -7,9 +7,9 @@ import time
 
 ################################################################################################
 #   Author: Toms Jiji Varghese                                                                 #
-#   Date: 19/11/2023                                                                           #
-#   Time: 11:55pm                                                                              #
-#   Rev: 1.7                                                                                   #
+#   Date: 22/11/2023                                                                           #
+#   Time: 3:02pm                                                                               #
+#   Rev: 1.8                                                                                   #
 #   GitHub: https://github.com/Toms-jiji/Kavach/tree/master                                    #
 #                                                                                              #
 #   Copyright (c) 2023 toms jiji varghese. ALL RIGHTS RESERVED.                                #
@@ -18,38 +18,38 @@ import time
 ################################################################################################ 
 
 
-FIXED_BRAKING_DISTANCE = True
-ENABLE_STALE_PACKET_SCAN = False
+FIXED_BRAKING_DISTANCE = True       #True -> braking distance is fixed ; False-> variable braking distance based on relative speed
+ENABLE_STALE_PACKET_SCAN = False    #True -> thread to scan stale train packets will start
 
+BREAKING_DISTANCE  = 100                                #used if fixed braking is selected               
+ACK_MESSAGE_SERVER              = "ACK_from_server"     #Message used to verify ACKs from server
+ACK_MESSAGE_CLIENT              = "ACK_from_client"     #Message used to verify ACKs from client
+STOP_MESSAGE                    = "STOP STOP STOP"      #Message sent by server to stop train
+CHALLENGE_FROM_CLIENT = "What is your professor's name" #Challenge message given by train/client
+RESPONSE_TO_CLIENT    = "TVP"                           #Accepted response for Client's Challenge
+CHALLENGE_FROM_SERVER = "What is your course name"      #Challenge sent by server to train 
+RESPONSE_TO_SERVER    = "TCP/IP"                        #Accepted response to Server's Challenge
+AUTH_TIMEOUT          = 1                               #Authentication Timeout time for ACKs
+CRC_POLYNOMIAL        = 198 #max 8bit                   #CRC polynomial in integer from for CRC calculation
+SERVER_PORT           = 10000                           #Server's main port number
 
+STALE_PACKET_TIMEOUT    = 15                            #time after the last packet from a train is received when and ALERT about train not responding is raised
+ACK_TIMEOUT             = 1                             #timeout for acks for STOP messages
+SERVER_IP          = "10.114.240.35"                    #Server IP address
+RTT_SCALING        = 20                                 #RTT scaling factor as RTT to reduce number of bits utilised while transmission by reducing resolution
 
-
-BREAKING_DISTANCE  = 100
-ACK_MESSAGE_SERVER = "ACK_from_server"
-ACK_MESSAGE_CLIENT = "ACK_from_client"
-CHALLENGE_FROM_CLIENT = "What is your professor's name"
-RESPONSE_TO_CLIENT    = "TVP"
-CHALLENGE_FROM_SERVER = "What is your course name"
-RESPONSE_TO_SERVER    = "TCP/IP"
-AUTH_TIMEOUT           = 1
-STALE_PACKET_TIMEOUT      = 15
-ACK_TIMEOUT         = 1
-CRC_POLYNOMIAL      = 198 #max 8bit
-SERVER_IP          = "10.114.240.35"
-RTT_SCALING        = 20
-SERVER_PORT        = 10000
-MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION   =   10 
+MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION   =   10                                            
 MIN_BRACKING_DISTANCE_REAR_END_COLLISION  =   MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION
-MIN_DECELERATION        =   6480                #km/hr^2
+MIN_DECELERATION        =   6480   #km/hr^2
 
 
-STOP_MESSAGE       = "STOP STOP STOP"
+
 key                = b'NaYMfYO0C8jy4fF1ImKOMobqqvq7FMlxDCIZDFIOShk='       #encription key
 
 print("Encryption Key: ",key)                               #printing encryption key
 fernet = Fernet(key)                                        #passing the encryption key to the cryptography function
 
-# Create a Lock object
+# Create a Lock object for thread safe operation
 lock = threading.Lock()
 
 Train_head                = None        #head pointer for Train linkedlist
@@ -59,7 +59,7 @@ Train_LL_length                = 0        #Length of Train's linkedlist
 Database_of_stations_LL_lenth  = 0        #Length of  database of station's linkedlist
 
 # Class to store all train information
-class Train_node:
+class Train_node:                           #Class used to create Linked List which is later used to store all train data
     def __init__(self, data_list=None, time=None, train_ip=None, train_port=None):   #Total = 127bits
         if data_list is None:
             self.rcvd_time       	 = None
@@ -89,32 +89,32 @@ class Train_node:
         
         elif time is None:
             self.rcvd_time       	 = None
-            self.weekday       	     = data_list[0] 			#20bits
-            self.train_no        	 = data_list[1]			    #16bits
+            self.weekday       	     = data_list[0] 			#20bits  -> used to store the weekday when train started
+            self.train_no        	 = data_list[1]			    #16bits  -> used to store the train number
             
-            self.station1         	 = data_list[2]			    #14bits
-            self.station2  	      	 = data_list[3]			    #14bits
-            self.at_station_YN     	 = data_list[4]		        #1bit
-            self.reached_platform_YN = data_list[5]	            #1bit
-            self.platform_ID 	     = data_list[6]			    #5bits
-            self.platform_entry_YN	 = data_list[7]	            #1bit
-            self.branch_ID	 	     = data_list[8]			    #6bits
-            self.distance		     = data_list[9]			    #6bits
-            self.loop_line_YN	     = data_list[10]			#1bit
-            self.loop_line_ID	     = data_list[11]			#1bit
-            self.track_direction	 = data_list[12]		    #1bit
+            self.station1         	 = data_list[2]			    #14bits  -> used to store station1 code 
+            self.station2  	      	 = data_list[3]			    #14bits  -> used to store station2 code
+            self.at_station_YN     	 = data_list[4]		        #1bit    -> used to determine if train is at a station
+            self.reached_platform_YN = data_list[5]	            #1bit    -> used to determine if train has reached a platform; if train is at a station
+            self.platform_ID 	     = data_list[6]			    #5bits   -> used to uniquely identify every platform; if train is at a staion
+            self.platform_entry_YN	 = data_list[7]	            #1bit    -> used to identify if train has entered a branch at a station leading to a particulat platform
+            self.branch_ID	 	     = data_list[8]			    #6bits   -> used to identify branch of track at a station
+            self.distance		     = data_list[9]			    #6bits   -> used to store distance from station1
+            self.loop_line_YN	     = data_list[10]			#1bit    -> used to identify if train is in a loop line
+            self.loop_line_ID	     = data_list[11]			#1bit    -> used to uniquely identify loopline entry and exit
+            self.track_direction	 = data_list[12]		    #1bit    -> used to identify UP and DOWN tracks
             
-            self.tx_time   		     = data_list[13]		    #20bits
-            self.speed     		     = data_list[14]            #8bits		#Max is 200kmph and resolution is 1kmph
-            self.stop      		     = data_list[15]			#1bit
-            self.direction 		     = data_list[16]           	#1bit		# 0-> towards station 1      1-> towards station 2
-            self.latency   		     = data_list[17]            #10bits		#Max is 2048ms and resolution is 2ms
-            self.train_ip   		 = train_ip
-            self.train_port   		 = train_port
-            self.next		         = None
+            self.tx_time   		     = data_list[13]		    #20bits  -> used to store time when the packet was transmitted
+            self.speed     		     = data_list[14]            #8bits   -> Max is 200kmph and resolution is 1kmph
+            self.stop      		     = data_list[15]			#1bit    -> 1=train is stopped else 0
+            self.direction 		     = data_list[16]           	#1bit    -> 0-> towards station 1      1-> towards station 2
+            self.latency   		     = data_list[17]            #10bits	 -> used to store RTT
+            self.train_ip   		 = train_ip                 # used to store train ip address
+            self.train_port   		 = train_port               # used to stop train port number
+            self.next		         = None                     #pointer to the next node
 
         else:
-            self.rcvd_time       	 = time
+            self.rcvd_time       	 = time                     # time when the packet was received
             self.weekday       	     = data_list[0] 			#20bits
             self.train_no        	 = data_list[1]			    #16bits
             
@@ -137,12 +137,12 @@ class Train_node:
             self.latency   		     = data_list[17]            #10bits		#Max is 2048ms and resolution is 2ms
             self.train_ip   		 = train_ip
             self.train_port   		 = train_port
-            self.next		         = None
+            self.next		         = None                     
 
-    def show(self):
+    def show(self):         #Function to print a node in linked list
         now = datetime.now()
         weekday = int(now.isoweekday())
-        hour = round((self.tx_time/weekday)//(60*60))
+        hour = round((self.tx_time/weekday)//(60*60))           #decoding time of packet reception
         min = round(((self.tx_time/weekday)%(60*60))//(60))
         sec = round(((self.tx_time/weekday)%(60*60))%(60))
         print("Train details are:")
@@ -175,6 +175,7 @@ class Train_linked_list:
     def __init__(self):
         self.head = Train_node()                    #Node containing pointer to the first link
 
+    #Function to append to existing linked list
     def append(self,data_list, time, train_ip,train_port):
         new_node = Train_node(data_list, time,train_ip, train_port)      #Create a new node with the new data
         cur = self.head                             
@@ -203,12 +204,12 @@ class Train_linked_list:
         trains_with_risk_of_collision = []      #Array containing trains with the risk of collision with the current train
         cur = cur.next
         while cur:
-            if((cur.train_no==my_train.train_no)):
+            if((cur.train_no==my_train.train_no)):  #skip the train if it is the train against which we are comparing
                 cur = cur.next
                 continue
-            if ((my_train.station1 == 1)and(my_train.station2 == 1)):
+            if ((my_train.station1 == 1)and(my_train.station2 == 1)):   #skip is station 1 and 2 are 1 -> used to identify first packet
                 return
-            if(cur.train_no==None):
+            if(cur.train_no==None):             #exit if we have reached the end of the linked list
                 cur = cur.next
                 continue
             if ((cur.station1==my_train.station1)and(cur.station2==my_train.station2)):        #Both trains are in the same set of tracks between two stations
@@ -327,7 +328,7 @@ class Train_linked_list:
             else:
                 print("#Both trains are NOT in the same set of tracks between two stations")                                       
                 i+=1
-            cur = cur.next
+            cur = cur.next      #update the pointer
         if(trains_with_risk_of_collision):
             print("trains with high risk found")
             if(head_on_collision==1):
@@ -336,7 +337,7 @@ class Train_linked_list:
             print("Trains with risk of collision are: ", trains_with_risk_of_collision)
             for i in range (0, len(trains_with_risk_of_collision)):
                 risky_trains = trains_with_risk_of_collision[i]
-            return trains_with_risk_of_collision
+            return trains_with_risk_of_collision            #return list of trains with risk of collision
 
     #Function to flush out / delete a train from the database. Used when the train reaches its destination
     def delete(self,train_no):
@@ -363,7 +364,7 @@ class Train_linked_list:
         else:
             return (None,None)
 
-    #Function to find a train from the linked list
+    #Function to find trains which are on the same track as the train for which response has not been received for long
     def find_other_trains_for_risk_with_stale_packet_trains(self,train_no):
         i=0
         cur = self.head
@@ -539,30 +540,34 @@ def decrypt_message(message):
 
     # Return the decrypted message
     return decrypted_message.decode()
-
+#function to extract first 8 bits from a binary string
 def extract_first_8_bits(binary_string):
     return binary_string[-8:]
 
+#function to remove first 8 bits from a binary string
 def remove_first_8_bits(binary_string):
     return binary_string[:-8]
 
+#Function use to calculate the remaininder of division of large numbers; used in CRC
 def mod_large_number(number, divisor):
     result = 0
     for bit in number:
         result = (result << 1 | int(bit)) % divisor
     return result
 
+# function to verify if the received message's crc is correct
 def verify_crc(data):
     crc_data = extract_first_8_bits(data)
     data = remove_first_8_bits(data)
     data = int(data,2)
     remainder = mod_large_number(str(data), CRC_POLYNOMIAL)
     crc_ref = format(remainder, '08b')
-    if(crc_data == crc_ref):
+    if(crc_data == crc_ref):                #if calculated CRC and received CRC is correct the return 1 else 0
         return 1
     else:
         return 0
 
+#Function to calculate CRC
 def crc(data):
     crc_data = mod_large_number(data, CRC_POLYNOMIAL)
     data = bin(int(data)) + format(crc_data, '08b')
@@ -580,12 +585,12 @@ def handle_client(data, sock, address, first_Call, sock_for_acks):
         return
     print("CRC passed")
 
-    rcvd_message = remove_first_8_bits(bin(int(rcvd_message,2)))
+    rcvd_message = remove_first_8_bits(bin(int(rcvd_message,2)))        #remove the crc bits
     # Send a response back to the client
     tx_message = encrypt_message(ACK_MESSAGE_SERVER)
-    sock.sendto(tx_message, address)
+    sock.sendto(tx_message, address)                                    #send ack for the message received
 
-    lock.acquire()
+    lock.acquire()  #acquire lock for printing to the terminal
     print("------------------------------------------------------------")
     print('Received {} bytes({}bits) from {}:{}'.format(len(rcvd_message),8*len(rcvd_message), address[0], address[1]))
     # print('Received Data: {}'.format(rcvd_message))
@@ -593,7 +598,7 @@ def handle_client(data, sock, address, first_Call, sock_for_acks):
 
     print("ACK Sent")
 
-    store_and_process_received_data(rcvd_message, address[0], address[1], first_Call, sock_for_acks)
+    store_and_process_received_data(rcvd_message, address[0], address[1], first_Call, sock_for_acks)    #function to process the received data
     print("exiting thread")
     print("------------------------------------------------------------")
     lock.release()
@@ -636,90 +641,91 @@ def store_and_process_received_data(message,train_ip, train_port, first_Call, so
 
     trains_with_risk_of_collision = Trains.trains_on_same_track(my_train)   #Checking for any other trains within alert distance and on the same track
     if trains_with_risk_of_collision != None:
-        send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision, sock_for_acks)
+        send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision, sock_for_acks)  #send alert to trains with high risk of collision
     return 0
 
+#Function to send alert to trains with risk of collision
 def send_alert_to_high_collision_risk_trains(trains_with_risk_of_collision, sock_for_acks):
     tx_message = encrypt_message(STOP_MESSAGE)
-    tx_message2 = MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION
+    # tx_message2 = MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION
     ack_list=[]
-    for i in range(len(trains_with_risk_of_collision)):
+    for i in range(len(trains_with_risk_of_collision)):         #Get the train ip and port corresponding to the high risk of collision train numbers
         train_network_details = Trains.find_train_IP_and_port(trains_with_risk_of_collision[i])
         train_network_details = (train_network_details[0], train_network_details[1] + 1)
         ack_list.append(train_network_details)
+        threading.Thread(target=stop_trains, args=(train_network_details,tx_message)).start()   #Create a seperate thread to send stop messages for all collision risk trains
 
-
-        threading.Thread(target=stop_trains, args=(train_network_details,tx_message)).start()
-    threading.Thread(target=check_for_acks_and_retransmit_if_needed, args=(trains_with_risk_of_collision,tx_message, sock_for_acks, ack_list)).start()
-
-        # sock.sendto(tx_message, train_network_details)
-        # sock.sendto(bin(tx_message2).encode(), train_network_details)
+    threading.Thread(target=check_for_acks_and_retransmit_if_needed, args=(trains_with_risk_of_collision,tx_message, sock_for_acks, ack_list)).start()  #create a thread of the STOP message ACKs have been received from all collision risk trains
     print("STOP Send to all collision risk trains")
     
+
+#Function to check if the STOP message ACKs have been received from all collision risk trains
 def check_for_acks_and_retransmit_if_needed(trains_with_risk_of_collision, tx_message, sock_for_acks, ack_list):
-    start_time = time.time()
+    start_time = time.time()                            #start a timer to retransmit the stop messages if acks don't arrive
     while True:
-        elapsed_time = time.time() - start_time
-        if elapsed_time >= 5:
+        elapsed_time = time.time() - start_time         #calculate the elapsed time
+        if elapsed_time >= 5:                           #checking is the timer to retransmit has elapsed or not             
             print("ack timeout")
-            start_time = time.time()
+            start_time = time.time()                    #update the start time again
             print(f'Sending stop again to : {ack_list}')
-            for i in range(len(ack_list)): 
-                threading.Thread(target=stop_trains, args=(ack_list[i],tx_message)).start()
-        sock_for_acks.settimeout(ACK_TIMEOUT)
+            for i in range(len(ack_list)):                      #Send stop messages to trains who havent responded to stop messages with acks
+                threading.Thread(target=stop_trains, args=(ack_list[i],tx_message)).start()     #Create seperate paralled threads to retransmit stop messages
+        sock_for_acks.settimeout(ACK_TIMEOUT)               #initializing timeout for ack messages
         try:
-            data, client = sock_for_acks.recvfrom(4096)      
+            data, client = sock_for_acks.recvfrom(4096)      #listen for ack messages
         except:
             continue
         if(decrypt_message(data) == ACK_MESSAGE_CLIENT):
             data = None
             if client in ack_list:
                 print(f'ACS for STOP received from: {client}')
-                ack_list.remove(client)
+                ack_list.remove(client)                         #Remove trains who have responded with an ack from the list of retransmit trains
         if(len(ack_list)==0):
-            print("exiting ack thread")
-            return
+            print("exiting ack thread")                         #if acks received from all trains then exit thread
+            return  
         
         
 
 
 
-
+#Function to retranmit stop messages to trains who did not respond with acks for the original stop message
 def stop_trains(train_network_details,tx_message):
-    sock.sendto(tx_message, train_network_details)
+    sock.sendto(tx_message, train_network_details)      #Send stop message
 
+#Function to authenticate the server using challenge response authentication
 def auth_server(sock_auth_server, sock_auth_client, sock_get_first_data, sock_for_acks):
     print(f"auth thread started...")
     while True:
         # print("Listening for auth")
         data, address = sock_auth_server.recvfrom(4096)
         data = decrypt_message(data)
-        if data == CHALLENGE_FROM_CLIENT:
+        if data == CHALLENGE_FROM_CLIENT:           #if challenge has been received then reply with the correct response
             print("server authenticated")
-            sock_auth_server.sendto(encrypt_message(RESPONSE_TO_CLIENT), address)
+            sock_auth_server.sendto(encrypt_message(RESPONSE_TO_CLIENT), address)   #replying witht he correct response
             time.sleep(0.01)
             print(f"Challenge sent to client; address: {address}")
-            sock_auth_server.sendto(encrypt_message(CHALLENGE_FROM_SERVER), address)
-            threading.Thread(target=auth_client_check, args=(sock_auth_client, sock_get_first_data, sock_for_acks)).start()
-        # return
+            sock_auth_server.sendto(encrypt_message(CHALLENGE_FROM_SERVER), address)    #send challenge to the same client from which the server received a challenge.
+            threading.Thread(target=auth_client_check, args=(sock_auth_client, sock_get_first_data, sock_for_acks)).start() #create seperate parallel thread to check if correct response has been received
 
+#Function to check if the client responded with correct response to the challenge
 def auth_client_check(sock_auth_client, sock_get_first_data, sock_for_acks):
     # print("auth client started")
     sock_auth_client.settimeout(AUTH_TIMEOUT)
     try:
         data, address2 = sock_auth_client.recvfrom(4096)
-        data = decrypt_message(data)
+        data = decrypt_message(data)            #decrypt received data
     except socket.timeout:
-        print("auth client sock timeout")
+        print("auth client sock timeout")       #ack timeout
         return
-    if data == RESPONSE_TO_SERVER:
+    if data == RESPONSE_TO_SERVER:                  #check if correct response has been received
         print("client authenticated")
-        threading.Thread(target=get_first_data,  args=(address2,sock_get_first_data, sock_for_acks)).start()
+        threading.Thread(target=get_first_data,  args=(address2,sock_get_first_data, sock_for_acks)).start()        #create seperate parallel thread to receive data form the client which was authenticated
         # print("going out of auth_client_check")
         return
     else:
         return
     
+#Function to get the first data after the challenge response authentication    
 def get_first_data(address, sock_get_first_data, sock_for_acks):
     print("get_first_data")
     
@@ -730,87 +736,79 @@ def get_first_data(address, sock_get_first_data, sock_for_acks):
     except socket.timeout:
         print("get_first_data timeout")
         return
-    if (address == address2):
+    if (address == address2):                       #Check if received data is from the client which was verified by the challenge response authentication
         # print("handle client called")
-        handle_client(data, sock_get_first_data, address, 1, sock_for_acks)
+        handle_client(data, sock_get_first_data, address, 1, sock_for_acks) #handle the data ; i.e store and process it
         # print("going out of get first data")
     return
 
-
+#Function to check for trains who haven't responded in a while (STALE_PACKET_TIMEOUT); i.e stale packets
 def check_for_stale_packets(sock_for_acks):
     while(True):
         time.sleep(1)
         now = datetime.now()
         weekday = int(now.isoweekday())
-        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))
+        current_time = ((now.hour)*60*60 + (now.minute)*60 + (now.second))      #calculate current time
         trains_on_same_track = []
         train_no=[]
         train_time = []
         try:
-            (train_no, train_time) = Trains.running_trains()
-        # except:
-        #     continue
+            (train_no, train_time) = Trains.running_trains()        #get trains which are currently running
         finally:
-            if(len(train_no)==None):
+            if(len(train_no)==None):                #check if no train is running
                 continue
         for i in range(len(train_no)):
-            # print(f'current time: {current_time}')
-            # print(f'train_time: {int(train_time[i])/weekday}')
             print(f'stale packet timeout triggering in: {(current_time-int(train_time[i])/weekday)+11}')
-            if ((current_time-int(train_time[i])/weekday)>(STALE_PACKET_TIMEOUT-17)):
+            if ((current_time-int(train_time[i])/weekday)>(STALE_PACKET_TIMEOUT-17)):                       #Check if the each train's last received packet is STALE_PACKET_TIMEOUT time (or more) before the current time
                 print(f'Stale Packet found, Train number is:{train_no[i]}')
-                print("!!!!.........ALERT ALERT ALERT.........!!!!")
+                print("!!!!.........ALERT ALERT ALERT.........!!!!")        #Send alert to a personel
                 trains_on_same_track.append(train_no[i])
 
         for i in range(len(trains_on_same_track)):
-            temp = Trains.find_other_trains_for_risk_with_stale_packet_trains(trains_on_same_track[i])
+            temp = Trains.find_other_trains_for_risk_with_stale_packet_trains(trains_on_same_track[i])  #find other trains which are on the same track as the trains which haven't responded in a while
             for i in range(len(temp)):
                 if(temp[i]) in trains_on_same_track:
                     continue
-                trains_on_same_track.append(temp[i])
-                
-
-
-        if(len(trains_on_same_track)!=0):
+                trains_on_same_track.append(temp[i])        #append all those trains in a list
+  
+        if(len(trains_on_same_track)!=0):               #send stop messages to all trains on the track on which a train which hasn't responded in a while was detected
             print(trains_on_same_track)
             send_alert_to_high_collision_risk_trains(trains_on_same_track, sock_for_acks)
-            Trains.delete(trains_on_same_track[i])
-        
-        # print(f'Running trains after stopping ones with stale packets and their corresponding risky ones: {Trains.display()}')
-        
-
-    
+            Trains.delete(trains_on_same_track[i])      #delete train to which stop has been sent    
 
 global Trains                               #linkedlist containing all the trains
 Trains = Train_linked_list()
 # Create a UDP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# Bind the socket to a specific IP address and port
+# Bind the socket to a specific IP address and port -> main listening port on which main data packtes re received
 server_address = (SERVER_IP, SERVER_PORT)
 sock.bind(server_address)
 
+#port/socket used in challenge receiption of the server and its response
 sock_auth_server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock_auth_server.bind((SERVER_IP, SERVER_PORT+1))
 
+#port/socket used in sending of challenge reception of its reponse form client
 sock_auth_client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock_auth_client.bind((SERVER_IP, SERVER_PORT+2))
 
+#port/socket used to get the first packet of data after the challenge response authenticatin has been done
 sock_get_first_data = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock_get_first_data.bind((SERVER_IP, SERVER_PORT+3))
 
+#port/socket used for reception of acks for stop messages
 sock_for_acks = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock_for_acks.bind((SERVER_IP, SERVER_PORT+4))
 
+#Thread to listen for challenge for challenge response authentication
 threading.Thread(target=auth_server, args=(sock_auth_server,sock_auth_client, sock_get_first_data, sock_for_acks)).start()
 
-if ENABLE_STALE_PACKET_SCAN == True:
+if ENABLE_STALE_PACKET_SCAN == True:        #if stale packet scanning is enabled then run its thread
     threading.Thread(target=check_for_stale_packets, args=(sock_for_acks,)).start()
 print("Waiting for a message...")
 while True:
-    # print("------------------------------------------------------------")
     # Wait for a message from a client
-    # print("Waiting for a message...")
     data, address = sock.recvfrom(4096)
 
     # Create a new thread to handle the client
