@@ -23,11 +23,6 @@ import sys
 ################################################################################################ 
 STOPPED_TRAINS = False
 TAIL_END_COLLISION = True
-AUTH_FAIL =False
-AUTH_FAIL_COMMENT = False
-CRC_FAIL = False
-
-
 
 ACK_MESSAGE_SERVER              = "ACK_from_server"
 ACK_MESSAGE_CLIENT              = "ACK_from_client"
@@ -36,14 +31,8 @@ CHALLENGE_FROM_CLIENT = "What is your professor's name"
 RESPONSE_TO_CLIENT    = "TVP"
 CHALLENGE_FROM_SERVER = "What is your course name"
 RESPONSE_TO_SERVER    = "TCP/IP"
-
-if(AUTH_FAIL_COMMENT==True):
-    RESPONSE_TO_CLIENT = "wrong!"
 AUTH_TIMEOUT           = 1
 CRC_POLYNOMIAL      = 198 #max 8bit
-if(CRC_FAIL==True):
-    CRC_POLYNOMIAL      = 199 #max 8bit
-
 SERVER_PORT                     = 10000  
 CLIENT_PORT                     = 11000
 PACKET_TX_RATE                  = 2
@@ -53,15 +42,16 @@ SERVER_IP                       = "10.114.240.35"
 TRANSMISSION_TIMEOUT            = 2
 
 WEEKDAY_START_OF_TRAIN          = 5
-TRAIN_NUMBER                    = 1105
-TRAIN_DIRECTION                 = 0
+TRAIN_NUMBER                    = 1106
+TRAIN_DIRECTION                 = 1
+
 if(STOPPED_TRAINS==True):
     SPEED                           = 0
 else:
     SPEED                           = 50
 
 if (TAIL_END_COLLISION == True):
-    SPEED                           = 5
+    SPEED                           = 150
     TRAIN_DIRECTION                 = 0
 
 key = b'NaYMfYO0C8jy4fF1ImKOMobqqvq7FMlxDCIZDFIOShk='
@@ -257,7 +247,7 @@ def decode_rfid_data(message,RTT):
     tx_time 		    = current_time
     speed 			    = SPEED  
     stop 			    = 0                                     #max 1
-    direction 		    = TRAIN_DIRECTION                       #max 1
+    direction 		    = TRAIN_DIRECTION                                     #max 1
     latency 		    = RTT
 
     message = int(message)
@@ -378,8 +368,6 @@ def auth_server(sock):
             status = auth_client(sock)
             if status ==1:
                 break
-        else:
-            print("Server NOT Authenticated")
     print("Everything authenticated")
     return
     
@@ -488,7 +476,7 @@ def first_packet_tx(sock,RTT, server_address):
     tx_time 		    = current_time      #max 1048575
     speed 			    = 0                #max 255
     stop 			    = 0                 #max 1
-    direction 		    = 0                 #max 1
+    direction 		    = 1                 #max 1
     latency 		    = 0               #max 1023
 
     array		        = [week_day, train_no, station1, station2, at_station_YN, reached_platform_YN, platform_ID, platform_entry_YN, branch_ID, distance, loop_line_YN, loop_line_ID, track_direction, tx_time, speed, stop, direction, latency]
@@ -529,8 +517,7 @@ print("Your Client-TX IP Address is: " + Client_IP)
 threading.Thread(target=listen_for_STOP, args=(sock,)).start() 
 
 RTT = 0
-if(AUTH_FAIL==False):
-    auth_server(sock)
+auth_server(sock)
 print("done authentication")
 while True:
     (temp, is_RTT) = main_tx_thread(sock,RTT)

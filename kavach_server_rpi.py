@@ -17,6 +17,13 @@ import time
 #   or modified without the express written permission of Toms Jiji Varghese.                  #
 ################################################################################################ 
 
+
+FIXED_BRAKING_DISTANCE = True
+ENABLE_STALE_PACKET_SCAN = False
+
+
+
+
 BREAKING_DISTANCE  = 100
 ACK_MESSAGE_SERVER = "ACK_from_server"
 ACK_MESSAGE_CLIENT = "ACK_from_client"
@@ -28,14 +35,12 @@ AUTH_TIMEOUT           = 1
 STALE_PACKET_TIMEOUT      = 15
 ACK_TIMEOUT         = 1
 CRC_POLYNOMIAL      = 198 #max 8bit
-SERVER_IP          = "10.217.68.128"
+SERVER_IP          = "10.114.240.35"
 RTT_SCALING        = 20
 SERVER_PORT        = 10000
 MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION   =   10 
 MIN_BRACKING_DISTANCE_REAR_END_COLLISION  =   MIN_BRACKING_DISTANCE_HEAD_ON_COLLISION
 MIN_DECELERATION        =   6480                #km/hr^2
-
-FIXED_BRAKING_DISTANCE = False
 
 
 STOP_MESSAGE       = "STOP STOP STOP"
@@ -196,7 +201,11 @@ class Train_linked_list:
         i=0
         cur = self.head
         trains_with_risk_of_collision = []      #Array containing trains with the risk of collision with the current train
-        while cur.next:
+        cur = cur.next
+        while cur:
+            if((cur.train_no==my_train.train_no)):
+                cur = cur.next
+                continue
             if ((my_train.station1 == 1)and(my_train.station2 == 1)):
                 return
             if(cur.train_no==None):
@@ -795,7 +804,8 @@ sock_for_acks.bind((SERVER_IP, SERVER_PORT+4))
 
 threading.Thread(target=auth_server, args=(sock_auth_server,sock_auth_client, sock_get_first_data, sock_for_acks)).start()
 
-threading.Thread(target=check_for_stale_packets, args=(sock_for_acks,)).start()
+if ENABLE_STALE_PACKET_SCAN == True:
+    threading.Thread(target=check_for_stale_packets, args=(sock_for_acks,)).start()
 print("Waiting for a message...")
 while True:
     # print("------------------------------------------------------------")

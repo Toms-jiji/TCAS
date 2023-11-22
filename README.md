@@ -11,8 +11,9 @@ This code is the sole property of Toms Jiji Varghese and may not be copied, dist
 <br>
 Kavach System code<br>
 <br>
-kavach_client_rpi -> Code to be run on rpi -> includes the rfid portion as well<br>
-kavach_server_rpi -> Code with ip of rpi<br>
-kavach_client     -> Clients and scenario emulator -> Loopback address used<br>
-kavach_server     -> For clients and scenario emulator -> Server code with loopback address <br>
-rfid_writer       -> Code to write data to rfid cards based on scenario<br>
+kavach_client_rpi  -> Code to be run on rpi1 -> includes the rfid portion as well<br>
+kavach_client_rpi2 -> Code to be run on rpi2 -> includes the rfid portion as well<br>
+kavach_server_rpi  -> Code with ip of rpi<br>
+kavach_client      -> Clients and scenario emulator -> Loopback address used<br>
+kavach_server      -> For clients and scenario emulator -> Server code with loopback address <br>
+rfid_writer        -> Code to write data to rfid cards based on scenario<br>
