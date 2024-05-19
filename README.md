@@ -1,5 +1,5 @@
-# Kavach
-Author: Toms Jiji Varghese                                                                 <br>
+# Train Collision Avoidance System
+Author: Toms Jiji Varghese (Mtech ESE, DESE, IISc)                                         <br>
 Date: 22/11/2023                                                                           <br>
 Time: 10:29pm                                                                              <br>
 Rev: 1.7                                                                                   <br>
